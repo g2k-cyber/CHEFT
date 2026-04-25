@@ -1,0 +1,352 @@
+#!/bin/bash
+# --- Configuration ---
+VERSION="1.06"
+
+# Dynamic search for the removable mount point
+REMOVABLE_ROOT=$(find /mnt -type d -name "removable" -print -quit 2>/dev/null)
+
+# Fallback if the search fails
+if [ -z "$REMOVABLE_ROOT" ]; then
+    REMOVABLE_ROOT="/mnt/chromeos/removable"
+fi
+
+VAULT_ROOT="$HOME/Vaults"
+MAX_DEV_NAME_LEN=16
+FIRST_RUN_FILE="$HOME/.vault_manager_init"
+
+# --- Color Definitions ---
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+BOLD_CYAN='\033[1;36m'
+NC='\033[0m'
+
+# --- 0. Static Banner ---
+draw_banner() {
+    local title="$1"
+    echo "=============================="
+    echo -e "          ---${BOLD_CYAN}CHEFT${NC}---         "
+    echo -e " ${BOLD_CYAN}CH${NC}rome-${BOLD_CYAN}E${NC}ncrypted-${BOLD_CYAN}F${NC}older-${BOLD_CYAN}T${NC}ool "
+    echo "=============================="
+    if [ -n "$title" ]; then
+        local padding=$(( (30 - ${#title}) / 2 ))
+        printf "%${padding}s${BOLD_CYAN}%s${NC}\n" "" "$title"
+        echo "------------------------------"
+    fi
+}
+
+# --- 0. Dependency Check ---
+check_dependencies() {
+    local deps=("gocryptfs" "fusermount3")
+    local missing=()
+    for pkg in "${deps[@]}"; do
+        if ! command -v "$pkg" >/dev/null 2>&1; then
+            missing+=("$pkg")
+        fi
+    done
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo "Missing dependencies: ${missing[*]}. Installing..."
+        sudo apt-get update && sudo apt-get install -y gocryptfs fuse3
+    fi
+}
+
+# --- 0.1 First Run Safety Reminder ---
+show_safety_reminder() {
+    if [ ! -f "$FIRST_RUN_FILE" ]; then
+        clear
+        draw_banner "SAFETY REMINDER"
+        echo -e "${BOLD}${RED}⚠️ IMPORTANT SAFETY REMINDER ⚠️${NC}"
+        echo "------------------------------"
+        echo -e "${BOLD}1. YOUR PASSWORD IS THE ONLY KEY${NC}"
+        echo "   There is no 'forgot password' option. If you lose your"
+        echo "   password, your files are gone forever. Keep it safe!"
+        echo ""
+        echo -e "${BOLD}2. LOCK AND EJECT PROPERLY${NC}"
+        echo "   Always lock the vault in this script first, THEN"
+        echo "   remove the drive from the ChromeOS file manager, before"
+        echo "   physically unplugging the drive."
+        echo ""
+        echo -e "${BOLD}3. PROTECT THE .VAULT FOLDER${NC}"
+        echo "   The hidden '.vault' folder on your drive contains your"
+        echo "   encrypted data. Never move, rename, or delete it."
+        echo "------------------------------"
+        echo ""
+        read -n 1 -s -r -p "Press any key to acknowledge and start..."
+        touch "$FIRST_RUN_FILE"
+    fi
+}
+
+# --- 0.2 Status Display Helper ---
+display_status() {
+    echo -e "${BOLD}   --- REMOVABLE DEVICES ---  ${NC}"
+    local found_devices=false
+    local devices=()
+    local display_names=()
+
+    for d in "$REMOVABLE_ROOT"/*; do
+        [ -e "$d" ] || continue
+        RAW_NAME=$(basename "$d")
+        [[ ${#RAW_NAME} -gt $MAX_DEV_NAME_LEN ]] && DEV_NAME="${RAW_NAME:0:$((MAX_DEV_NAME_LEN - 2))}.." || DEV_NAME="$RAW_NAME"
+        BRACKET_NAME="[$DEV_NAME]"
+        devices+=("$d");
+        display_names+=("$BRACKET_NAME")
+        found_devices=true
+    done
+
+    if [ "$found_devices" = false ]; then
+        echo "  No removable devices found. "
+    else
+        for i in "${!devices[@]}"; do
+            local d="${devices[$i]}"
+            local bracketed="${display_names[$i]}"
+            MOUNT_POINT="$VAULT_ROOT/$(basename "$d")"
+            if [ -d "$d/.vault" ]; then
+                mountpoint -q "$MOUNT_POINT" && STATUS="[OPEN]" || STATUS="[LOCKED]"
+            else
+                STATUS="[No Vault]"
+            fi
+            printf "  %-18s %s\n" "$bracketed" "$STATUS"
+        done
+    fi
+    echo "------------------------------"
+}
+
+# --- Helper: Pause ---
+pause() {
+    echo ""
+    read -n 1 -s -r -p "Press any key to return to the menu..."
+}
+
+# --- 1. Toggle Lock/Unlock ---
+toggle_vaults() {
+    while true; do
+        clear
+        draw_banner "LOCK / UNLOCK VAULTS"
+        display_status
+        local vault_drives=()
+        for d in "$REMOVABLE_ROOT"/*; do
+            [ -d "$d/.vault" ] && vault_drives+=("$d");
+        done
+
+        local i=1
+        if [ ${#vault_drives[@]} -gt 0 ]; then
+            for drive in "${vault_drives[@]}"; do
+                DEV_NAME=$(basename "$drive")
+                mountpoint -q "$VAULT_ROOT/$DEV_NAME" && printf "%s) %-15s (LOCK)\n" "$i" "$DEV_NAME" || printf "%s) %-15s (UNLOCK)\n" "$i" "$DEV_NAME"
+                ((i++))
+            done
+        fi
+        echo "$i) Back to Main Menu"
+        echo "------------------------------"
+        read -p "Make Selection [1-$i]: " T_CHOICE
+        [[ "$T_CHOICE" -eq "$i" ]] && return
+
+        local idx=$((T_CHOICE - 1))
+        if [[ "$idx" -ge 0 && "$idx" -lt ${#vault_drives[@]} ]]; then
+            TARGET_DRIVE="${vault_drives[$idx]}"
+            DEV_NAME=$(basename "$TARGET_DRIVE")
+            MOUNT_POINT="$VAULT_ROOT/$DEV_NAME"
+            if mountpoint -q "$MOUNT_POINT"; then
+                echo "Syncing and locking $DEV_NAME..."; sync
+                fusermount3 -uz "$MOUNT_POINT" && rmdir "$MOUNT_POINT" 2>/dev/null
+            else
+                echo "Unlocking $DEV_NAME..."; mkdir -p "$MOUNT_POINT"
+                gocryptfs "$TARGET_DRIVE/.vault" "$MOUNT_POINT"
+            fi
+            sleep 1
+        else
+            [[ -n "$T_CHOICE" ]] && echo "Invalid selection." && sleep 1
+        fi
+    done
+}
+
+# --- 2. Add/Remove Vaults ---
+manage_vaults() {
+    while true; do
+        clear
+        draw_banner "ADD / REMOVE VAULTS"
+        display_status
+        echo "1) Create NEW Vault"
+        echo "2) Delete EXISTING Vault"
+        echo "3) Back to Main Menu"
+        echo "------------------------------"
+        read -p "Select an option [1-3]: " VR_CHOICE
+        case $VR_CHOICE in
+            1)
+                echo "Select a drive:"
+                local eligible_drives=()
+                for d in "$REMOVABLE_ROOT"/*; do
+                    [ -e "$d" ] && [ ! -d "$d/.vault" ] && eligible_drives+=("$d");
+                done
+                if [ ${#eligible_drives[@]} -eq 0 ]; then
+                    echo "No eligible drives found."
+                else
+                    local i=1
+                    for d in "${eligible_drives[@]}"; do
+                        printf "%s) %-15s ${GREEN}(Make Vault)${NC}\n" "$i" "$(basename "$d")"; ((i++)) ;
+                    done
+                    echo "$i) Back to Main Menu"
+                    read -p "Drive choice [1-$i]: " D_CHOICE
+                    if [[ "$D_CHOICE" -lt "$i" && "$D_CHOICE" -gt 0 ]]; then
+                        local target="${eligible_drives[$((D_CHOICE-1))]}"
+                        mkdir -p "$target/.vault"; gocryptfs -init "$target/.vault"
+                    fi
+                fi
+                pause ;;
+            2)
+                echo "Select a drive:"
+                local vault_drives=()
+                for d in "$REMOVABLE_ROOT"/*; do
+                    [ -d "$d/.vault" ] && vault_drives+=("$d");
+                done
+                if [ ${#vault_drives[@]} -eq 0 ]; then
+                    echo "No drives with vaults found."
+                else
+                    local i=1
+                    for d in "${vault_drives[@]}"; do
+                        printf "%s) %-15s ${RED}(Delete Vault)${NC}\n" "$i" "$(basename "$d")"; ((i++));
+                    done
+                    echo "$i) Back to Main Menu"
+                    read -p "Drive choice [1-$i]: " D_CHOICE
+                    if [[ "$D_CHOICE" -lt "$i" && "$D_CHOICE" -gt 0 ]]; then
+                        local target="${vault_drives[$((D_CHOICE-1))]}"
+                        read -p "Confirm deletion of $(basename "$target")/.vault? (y/n): " CONFIRM
+                        [[ $CONFIRM == [yY] ]] && rm -rf "$target/.vault" && echo "Vault deleted."
+                    fi
+                fi
+                pause ;;
+            3) return ;;
+        esac
+    done
+}
+
+# --- 3. Change Password ---
+change_password() {
+    while true; do
+        clear
+        draw_banner "CHANGE PASSWORD"
+        display_status
+        local vault_drives=()
+        for d in "$REMOVABLE_ROOT"/*; do
+            [ -d "$d/.vault" ] && vault_drives+=("$d");
+        done
+        local i=1
+        for drive in "${vault_drives[@]}"; do
+            echo "$i) $(basename "$drive")"; ((i++));
+        done
+        echo "$i) Back to Main Menu"
+        echo "------------------------------"
+        read -p "Select drive [1-$i]: " P_CHOICE
+        [[ "$P_CHOICE" -eq "$i" ]] && return
+        local idx=$((P_CHOICE - 1))
+        if [[ "$idx" -ge 0 && "$idx" -lt ${#vault_drives[@]} ]]; then
+            gocryptfs -passwd "${vault_drives[$idx]}/.vault"; pause; return
+        fi
+        echo "Invalid selection."; sleep 1
+    done
+}
+
+# --- 4. About & Documentation ---
+show_about() {
+    while true; do
+        clear
+        draw_banner "ABOUT CHEFT"
+        echo -e "${BOLD}Version:${NC} $VERSION"
+        echo "------------------------------"
+        echo "1) View Documentation"
+        echo "2) Back to Main Menu"
+        echo "------------------------------"
+        echo "Designed by g2kmobile with the"
+        echo "help and assistance of Gemini"
+        echo "------------------------------"
+        read -p "Select an option [1-2]: " AB_CHOICE
+        case $AB_CHOICE in
+            1)
+                clear
+                echo -e "${BOLD}--- DOCUMENTATION ---${NC}"
+                echo "CHEFT manages encrypted folders on removable drives."
+                echo ""
+                echo -e "${BOLD}HOW IT WORKS:${NC}"
+                echo "1. The script uses 'gocryptfs' to create an encrypted hidden"
+                echo "   folder named '.vault' on your USB or SD card."
+                echo ""
+                echo "2. DYNAMIC PATHING: CHEFT now automatically searches /mnt"
+                echo "   to find where ChromeOS attaches removable drives."
+                echo ""
+                echo "3. When 'Unlocked', the encrypted data is mapped to"
+                echo "   ~/Vaults/DriveName in your Linux files."
+                echo ""
+                echo -e "${BOLD}IMPORTANT SAFETY RULES:${NC}"
+                echo "- 1. PASSWORD: No recovery option exists. Keep it safe!"
+                echo ""
+                echo "- 2. EJECT: Always LOCK in CHEFT first, then EJECT in"
+                echo "     the ChromeOS Files app before unplugging."
+                echo ""
+                echo "- 3. VAULT FOLDER: Never delete the hidden '.vault' folder."
+                echo ""
+                echo "------------------------------"
+                echo "Designed by g2kmobile with the"
+                echo "help and assistance of Gemini"
+                echo "------------------------------"
+                pause ;;
+            2) return ;;
+        esac
+    done
+}
+
+# --- 5. Exit Logic ---
+exit_routine() {
+    while true; do
+        clear
+        draw_banner "EXIT OPTIONS"
+        display_status
+        echo "1) Lock Vault"
+        echo "2) Lock ALL and Exit"
+        echo "3) Exit (NO Locking)"
+        echo "4) Back to Main Menu"
+        echo "------------------------------"
+        read -p "Make Selection [1-4]: " E_CHOICE
+        case $E_CHOICE in
+            1) toggle_vaults ;;
+            2)
+                echo "Syncing..."; sync
+                for folder in "$VAULT_ROOT"/*; do
+                    if mountpoint -q "$folder"; then
+                        fusermount3 -uz "$folder"; rmdir "$folder" 2>/dev/null;
+                    fi
+                done
+                clear; exit 0 ;;
+            3) clear; exit 0 ;;
+            4) return ;;
+        esac
+    done
+}
+
+# --- Main Script Entry ---
+check_dependencies
+show_safety_reminder
+mkdir -p "$VAULT_ROOT"
+
+while true; do
+    clear
+    draw_banner "MAIN MENU"
+    display_status
+    echo "1) Lock / Unlock Vaults"
+    echo "2) Add / Remove Vaults"
+    echo "3) Change Password"
+    echo "4) Refresh Devices"
+    echo "5) About"
+    echo "6) Exit"
+    echo "------------------------------"
+    read -p "Select an option [1-6]: " CHOICE
+    case $CHOICE in
+        1) toggle_vaults ;;
+        2) manage_vaults ;;
+        3) change_password ;;
+        4) continue ;;
+        5) show_about ;;
+        6) exit_routine ;;
+        *) [[ -n "$CHOICE" ]] && echo "Invalid selection." && sleep 1 ;;
+    esac
+done
