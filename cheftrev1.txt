@@ -1,6 +1,6 @@
 #!/bin/bash
 # --- Configuration ---
-VERSION="1.06"
+VERSION="1.00.01"
 
 # Dynamic search for the removable mount point
 REMOVABLE_ROOT=$(find /mnt -type d -name "removable" -print -quit 2>/dev/null)
