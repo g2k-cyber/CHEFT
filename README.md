@@ -16,9 +16,15 @@ It is presented here as a simple .txt file, keep reading for a mini tutorial to 
 sudo cp /home/YourUserName/cheftrev1.txt  /usr/bin/cheft (or whatever name you call it)
 
 5) Next comes the initialization process. To make the script useable you must initialize it with:
-sudo chmod +x /usr/bin/cheft after this, chown the file so you don't need sudo to run it: chown user:user /usr/bin/cheft
-if you simply type cheft into the terminal, and hit the enter key,it'll launch.
-If you DON'T do this you will have tot type sudo cheft in order to run the program.
+sudo chmod +x /usr/bin/cheft
+
+After this, chown the file so you don't need sudo to run it: 
+sudo chown user:user /usr/bin/cheft
+NOTE: replace user:user with your actual username. In my case it would be:
+sudo chown g2k:g2k /usr/bin/cheft
+
+Once finished; if you simply type cheft into the terminal, and hit the enter key,it'll launch.
+If you DON'T do this you will have to type sudo cheft in order to run the program.
 
 CHEFT should perform the 1st run "dependency check" and the "Backup your key file" reminder message. The first run reminder message only runs the first time the app launches.
 
