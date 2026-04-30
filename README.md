@@ -5,10 +5,10 @@ It is presented with absolutely no warranties or assurances. Use this script at 
 
 It is presented here as a simple .txt file, keep reading for a mini tutorial to install/setup the script. In my example the cheft.rev1.txt file is in my chromebook Downloads folder.
 
-***Tutorial***
+***Mini-Tutorial***
 1) Download cheftrev1.txt to Downloads, and copy it over to your "Linux files" in the chromeOS files app.
 
-2) Copy the .txt file to "Linux files" folder. The "Linux files" folder is /home/YouruserName/, sometimes it is found at: /home/YourUserName/Downloads
+2) The "Linux files" folder is /home/YouruserName/, INSIDE the linux development environment. Sometimes it is found at: /home/YourUserName/Downloads
 
 3) Open the linux development environment and find your file. On my system it is /home/g2k/cheftrev1.txt
 
@@ -16,9 +16,11 @@ It is presented here as a simple .txt file, keep reading for a mini tutorial to 
 sudo cp /home/YourUserName/cheftrev1.txt  /usr/bin/cheft (or whatever name you call it)
 
 5) Next comes the initialization process. To make the script useable you must initialize it with:
-sudo chmod +x /usr/bin/cheft after this, if you simply type cheft into the terminal, and hit the enter key,it'll launch.
+sudo chmod +x /usr/bin/cheft after this, chown the file so you don't need sudo to run it: chown user:user /usr/bin/cheft
+if you simply type cheft into the terminal, and hit the enter key,it'll launch.
+If you DON'T do this you will have tot type sudo cheft in order to run the program.
 
-It should perform the 1st run "dependency check" and the "Backup your key file" reminder message. The first run reminder message only runs the first time the app launches.
+CHEFT should perform the 1st run "dependency check" and the "Backup your key file" reminder message. The first run reminder message only runs the first time the app launches.
 
 NOTE: Once a vault is open you can interact with the files and folders on it using:
 1) Chromebook files app.
@@ -26,13 +28,13 @@ NOTE: Once a vault is open you can interact with the files and folders on it usi
 The encrypted vaults show up under "Linux files" "Vaults" "STORAGE_DEVICE_NAME"; in the left side pane.
 It is a direct connection to the hidden .vault encrypted folder on the external storage device.
 
-The NON encrypted folder is accessed under the "storage device name" in the left panel of the files app.
+The NON encrypted, remainder of the storage device is accessed under the "storage device name" in the left panel of the files app.
 The Storage device name is the name you see when you plug in a thumb drive, etc.
 
 2) The file manager you have installed on your Crostini Linux terminal. 
 
 The mount points are a little different though.
-The encrypted .vault folder is still available at: /home/user/Vaults.
+The encrypted .vault folder is still available at: /home/user/Vaults/devicename.
 
 The NON encrypted portion of the thumb drive used to be mapped to: /mnt/chromeos/removable
 
