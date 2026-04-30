@@ -13,13 +13,19 @@ It is presented here as a simple .txt file, keep reading for a mini tutorial to 
 3) Open the linux development environment and find your file. On my system it is /home/g2k/cheftrev1.txt
 
 4) Copy the file to /usr/bin and rename it to cheft. The command to do this is:
+   
 sudo cp /home/YourUserName/cheftrev1.txt  /usr/bin/cheft (or whatever name you call it)
 
-5) Next comes the initialization process. To make the script useable you must initialize it with:
+NOTE: there is double spacing between the "/cheftrev1.txt" and "/usr/bin/cheft"
+
+6) Next comes the initialization process. To make the script useable you must initialize it with:
+
 sudo chmod +x /usr/bin/cheft
 
 After this, chown the file so you don't need sudo to run it: 
+
 sudo chown user:user /usr/bin/cheft
+
 NOTE: replace user:user with your actual username. In my case it would be:
 sudo chown g2k:g2k /usr/bin/cheft
 
