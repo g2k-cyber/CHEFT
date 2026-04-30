@@ -14,7 +14,7 @@ It is presented here as a simple .txt file, keep reading for a mini tutorial to 
 
 4) Copy the file to /usr/bin and rename it to cheft. The command to do this is:
    
-sudo cp /home/YourUserName/cheftrev1.txt  /usr/bin/cheft (or whatever name you call it)
+sudo cp /home/YourUserName/cheftrev1.txt   /usr/bin/cheft (or whatever name you call it)
 
 NOTE: there is double spacing between the "/cheftrev1.txt" and "/usr/bin/cheft"
 
@@ -48,10 +48,13 @@ The Storage device name is the name you see when you plug in a thumb drive, etc.
 The mount points are a little different though.
 The encrypted .vault folder is still available at: /home/user/Vaults/devicename.
 
-The NON encrypted portion of the thumb drive used to be mapped to: /mnt/chromeos/removable
+The NON encrypted portion of the thumb drive used to be mapped to: "/mnt/chromeos/removable"
 
-Now, Google apparently changed it to: /mnt/shared/removable
-NOTE: inside /mnt there is still a /chromeos folder that offers: /mnt/chromeos/shared/removable .
+Now, Google apparently changed it to: 
+
+"/mnt/shared/removable"
+
+NOTE: inside "/mnt" there is still a "/chromeos" folder that offers: "/mnt/chromeos/shared/removable" .
 The script searches for the first folder it finds called 'removable' inside the /mnt folder.
 
 It then looks inside that folder for external storage devices. It then scans those devices and keeps track of which ones have a .vault folder, and which ones don't.
